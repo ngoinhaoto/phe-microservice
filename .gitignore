@@ -1,2 +1,3 @@
-client_microservice_env/
+microservice_env/
 .env
+keys/
