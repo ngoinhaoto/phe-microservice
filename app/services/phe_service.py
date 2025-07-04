@@ -7,6 +7,8 @@ import ast
 from multiprocessing import Value, Lock
 from app.core.config import settings, logger
 
+from lightphe import LightPHE
+
 # Global shared counter for initialization
 init_counter = Value('i', 0)
 init_lock = Lock()
@@ -155,7 +157,7 @@ class LightPHEWrapper:
         if not cls._instance:
             return False
             
-        try:
+        try:            
             # Check if keys exist
             if not os.path.exists(settings.PRIVATE_KEY_PATH) or not os.path.exists(settings.PUBLIC_KEY_PATH):
                 return False
