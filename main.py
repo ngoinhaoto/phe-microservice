@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Request
+from fastapi import FastAPI, HTTPException, File, UploadFile, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -43,7 +43,6 @@ class LightPHEWrapper:
             from lightphe import LightPHE
             private_key_path = "keys/private_key.txt"
             
-            # Create keys if they don't exist (only once)
             if not os.path.exists(private_key_path):
                 logger.info("Generating new PHE key pair...")
                 os.makedirs("keys", exist_ok=True)
@@ -56,12 +55,10 @@ class LightPHEWrapper:
                     logger.info("Using existing PHE key pair (first use in this process).")
                     cls._initialized = True
             
-            # Initialize PHE with private key
             cls._instance = LightPHE(algorithm_name="Paillier", precision=19, key_file=private_key_path)
             
         return cls._instance
 
-# Create startup/shutdown context for app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
@@ -139,7 +136,6 @@ async def extract_and_encrypt(file: UploadFile = File(...)):
             embedding_objs = DeepFace.represent(
                 img_path=temp_path, 
                 model_name=model,
-                enforce_detection=True,
                 detector_backend="yunet"
             )
             extraction_time = time.time() - start_time
@@ -262,7 +258,6 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
             embedding_objs = DeepFace.represent(
                 img_path=temp_path, 
                 model_name="VGG-Face",
-                enforce_detection=True,
                 detector_backend="yunet"
             )
             
@@ -285,6 +280,24 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
                 },
                 headers=headers
             )
+            
+            server_response.raise_for_status()
+            response_data = server_response.json()
+            
+            return {
+                "message": "Face registration successful",
+                "embedding_id": response_data.get("embedding_id"),
+                "registration_group_id": response_data.get("registration_group_id"),
+                "embedding_type": response_data.get("embedding_type", "encrypted_tensor"),
+                "status": "success"
+            }
+                
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP error during registration: {str(e)}")
+            # Pass along the server's error message
+            status_code = e.response.status_code if e.response else 500
+            detail = e.response.json().get("detail") if e.response and e.response.json() else str(e)
+            raise HTTPException(status_code=status_code, detail=detail)
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -351,13 +364,15 @@ async def verify_face_direct(request: Request, file: UploadFile = File(...), ses
                         
                         logger.info(f"Raw decrypted value: {decrypted_similarity}")
                         
-                        # Get the similarity value as a float
                         if isinstance(decrypted_similarity, list):
                             similarity_value = float(decrypted_similarity[0])
                         else:
                             similarity_value = float(decrypted_similarity)
                             
-                        logger.info(f"Similarity value: {similarity_value}")
+                        # Add this normalization step to ensure proper cosine similarity range
+                        similarity_value = max(min(similarity_value, 1.0), -1.0)
+
+                        logger.info(f"Normalized similarity value: {similarity_value}")
                         
                         # Update best match if this is higher
                         if similarity_value > highest_similarity:
@@ -412,6 +427,56 @@ async def verify_face_direct(request: Request, file: UploadFile = File(...), ses
         logger.error(f"Error in direct face verification: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/register-face-server-encryption")
+async def register_face_server_encryption(request: Request, file: UploadFile = File(...)):
+    """Send raw image to server for extraction and encryption"""
+    try:
+        # Get the auth header from the incoming request
+        auth_header = request.headers.get("Authorization")
+        
+        # Prepare headers for the server request
+        headers = {
+            "X-API-Key": settings.API_KEY
+        }
+        
+        if auth_header:
+            headers["Authorization"] = auth_header
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Create multipart form data
+        files = {
+            'file': ('face.jpg', file_content, 'image/jpeg')
+        }
+        
+        # Send directly to server for processing
+        server_response = requests.post(
+            f"{settings.SERVER_URL}/phe/register-face-server-side",
+            files=files,
+            headers=headers
+        )
+        
+        server_response.raise_for_status()
+        response_data = server_response.json()
+        
+        return {
+            "message": "Face registered successfully (server-side encryption)",
+            "embedding_id": response_data.get("embedding_id"),
+            "registration_group_id": response_data.get("registration_group_id"),
+            "embedding_type": response_data.get("embedding_type"),
+            "status": "success"
+        }
+                
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error during server-side registration: {str(e)}")
+        status_code = e.response.status_code if hasattr(e, 'response') else 500
+        detail = e.response.json() if hasattr(e, 'response') and hasattr(e.response, 'json') else str(e)
+        raise HTTPException(status_code=status_code, detail=detail)
+    except Exception as e:
+        logger.error(f"Error in server-side registration: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def extract_embedding(file: UploadFile):
     model = "VGG-Face"
     
@@ -429,7 +494,6 @@ async def extract_embedding(file: UploadFile):
             embedding_objs = DeepFace.represent(
                 img_path=temp_path, 
                 model_name=model,
-                enforce_detection=True,
                 detector_backend="yunet"
             )
             extraction_time = time.time() - start_time
