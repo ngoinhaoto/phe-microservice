@@ -25,30 +25,21 @@ class LightPHEWrapper:
                 if init_counter.value == 0:
                     logger.info("First PHE service initialization")
                 init_counter.value += 1
-            
-            from lightphe import LightPHE
-            private_key_path = settings.PRIVATE_KEY_PATH
-            key_info_path = settings.KEY_INFO_PATH
-            
-            # Check if keys directory exists
+        
             os.makedirs(settings.KEYS_DIR, exist_ok=True)
             
-            # Get or create key ID with file lock to prevent race conditions
-            key_id = cls._get_or_create_key_id(key_info_path)
-            
-            if not os.path.exists(private_key_path):
-                logger.info(f"Generating new PHE key pair with ID: {key_id}")
-                
-                # Generate keys with explicit create_keys call
+            if not os.path.exists(settings.PRIVATE_KEY_PATH):
                 try:
+                    logger.info(f"PRIVATE PATH: {settings.PRIVATE_KEY_PATH}")
+                    logger.info(f"PRIVATE PATH: {settings.PUBLIC_KEY_PATH}")
+                    logger.info(f"PRIVATE_KEY_PATH type: {type(settings.PRIVATE_KEY_PATH)}, value: {settings.PRIVATE_KEY_PATH}")
+                    logger.info(f"PUBLIC_KEY_PATH type: {type(settings.PUBLIC_KEY_PATH)}, value: {settings.PUBLIC_KEY_PATH}")
                     cs = LightPHE(algorithm_name=settings.PHE_ALGORITHM, precision=settings.PHE_PRECISION)
-                    cs.pk, cs.sk = cs._create_keys()
                     
-                    # Export keys
-                    cs.export_keys(private_key_path, public=False)
+                    cs.export_keys(settings.PRIVATE_KEY_PATH, public=False)
                     cs.export_keys(settings.PUBLIC_KEY_PATH, public=True)
                     
-                    logger.info(f"Key pair generated and exported successfully with ID: {key_id}")
+                    logger.info(f"Generated new PHE keys [Public and private]")
                     cls._instance = cs
                 except Exception as e:
                     logger.error(f"Error generating PHE keys: {str(e)}")
@@ -59,63 +50,16 @@ class LightPHEWrapper:
                     cls._initialized = True
                 
                 try:
-                    # Always load with explicit private key path
                     cls._instance = LightPHE(
                         algorithm_name=settings.PHE_ALGORITHM, 
                         precision=settings.PHE_PRECISION, 
-                        key_file=private_key_path
+                        key_file=settings.PRIVATE_KEY_PATH
                     )
-                    logger.info(f"Successfully loaded PHE keys with ID: {key_id}")
                 except Exception as e:
                     logger.error(f"Failed to load PHE keys: {str(e)}")
                     raise
         
         return cls._instance
-    
-    @classmethod
-    def _get_or_create_key_id(cls, key_info_path):
-        """Get existing key ID or create a new one with proper locking"""
-        try:
-            # Check if key info exists
-            if os.path.exists(key_info_path):
-                with open(key_info_path, 'r') as f:
-                    key_info = json.load(f)
-                    key_id = key_info.get("key_id", None)
-                
-                if key_id:
-                    return key_id
-            
-            # If we get here, need to create a new key ID
-            with init_lock:
-                # Double-check after acquiring lock
-                if os.path.exists(key_info_path):
-                    try:
-                        with open(key_info_path, 'r') as f:
-                            key_info = json.load(f)
-                            key_id = key_info.get("key_id", None)
-                        if key_id:
-                            return key_id
-                    except:
-                        pass  # Continue to create new if read fails
-                
-                # Create new key info
-                key_id = str(uuid.uuid4())
-                key_info = {
-                    "key_id": key_id,
-                    "created_at": datetime.now().isoformat(),
-                    "algorithm": settings.PHE_ALGORITHM,
-                    "precision": settings.PHE_PRECISION
-                }
-                
-                with open(key_info_path, 'w') as f:
-                    json.dump(key_info, f)
-                
-                logger.info(f"Created new key ID: {key_id}")
-                return key_id
-        except Exception as e:
-            logger.error(f"Error in key ID management: {str(e)}")
-            # Create a fallback key ID if everything fails
-            return str(uuid.uuid4())
 
     @classmethod
     def encrypt(cls, data):

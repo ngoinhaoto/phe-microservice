@@ -196,8 +196,6 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
             "X-API-Key": settings.API_KEY  # Make sure API_KEY is defined in settings
         }
         
-        # Debug log to verify API key is being sent
-        logger.info(f"Using API key for server request: {settings.API_KEY[:5]}...")
         
         if auth_header:
             headers["Authorization"] = auth_header
@@ -429,10 +427,8 @@ def test_key_compatibility():
     try:
         logger.info("Starting key compatibility test")
         
-        # Get PHE service instance
         phe_service = LightPHEWrapper.get_instance()
         
-        # Get test data from server
         headers = {
             "Content-Type": "application/json",
             "X-API-Key": settings.API_KEY
@@ -450,9 +446,7 @@ def test_key_compatibility():
             original_array = result.get("test_array")
             encrypted_array_str = result.get("encrypted_array")
             server_key_id = result.get("key_id")
-            
-            logger.info(f"Received encrypted test array from server with key ID: {server_key_id}")
-            
+                        
             # Get our key ID
             key_info = LightPHEWrapper.get_key_info()
             current_key_id = key_info.get("key_id", "unknown") if key_info else "unknown"
