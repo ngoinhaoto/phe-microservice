@@ -11,6 +11,7 @@ from app.services.face_service import extract_embedding
 from app.utils.helpers import ensure_key_match
 from app.core.config import settings, logger
 import cv2
+from app.utils.face_utils import check_face_completeness
 
 router = APIRouter(tags=["Face Operations"])
 
@@ -78,8 +79,7 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
                 
                 if settings.ENABLE_ANTISPOOFING:
                     try:
-                        logger.info("Starting anti-spoofing check")
-                        # Extract faces with anti-spoofing enabled                        
+                        logger.info("Starting anti-spoofing check")                    
                         anti_spoof_faces = DeepFace.extract_faces(
                             img_path=temp_path,
                             anti_spoofing=True
@@ -93,14 +93,12 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
                             face_obj = anti_spoof_faces[0]
                             is_real = face_obj.get("is_real", False)
                             
-                            # Check if the face is real based on DeepFace result
                             if is_real:
                                 is_spoof = False
                                 logger.info(f"DeepFace anti-spoofing result: Face appears to be real (is_real={is_real})")
                             else:
                                 logger.warning(f"DeepFace anti-spoofing result: Potential spoof detected (is_real={is_real})")
                                 
-                                # Additional check: If confidence is very high, we might still accept it
                                 confidence = face_obj.get("confidence", 0.0)
                                 if confidence > 0.95:
                                     logger.info(f"High confidence detection ({confidence}), overriding spoof detection")
@@ -213,77 +211,3 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
             detail=f"An unexpected error occurred: {str(e)}"
         )
 
-def check_face_completeness(face_obj, img=None):
-    """
-    Check if the face is complete (entire face is visible in the frame).
-    
-    Args:
-        face_obj: The face object from DeepFace extract_faces
-        img: Original image (numpy array) if available
-    """
-    try:
-        if not face_obj:
-            return False, "No face detected"
-            
-        if isinstance(face_obj, list) and len(face_obj) > 0:
-            face_obj = face_obj[0]
-        
-        # Get image dimensions if available
-        img_width, img_height = 0, 0
-        if img is not None:
-            img_height, img_width = img.shape[:2]
-        
-
-        if "facial_area" not in face_obj:
-            return False, "No facial area information available"
-            
-        facial_area = face_obj["facial_area"]
-        
-        # Get face coordinates
-        x = facial_area.get("x", 0)
-        y = facial_area.get("y", 0)
-        w = facial_area.get("w", 0)
-        h = facial_area.get("h", 0)
-        
-        # If we couldn't determine image dimensions earlier, try to infer from face
-        if img_width == 0 and "img" in face_obj:
-            face_img = face_obj["img"]
-            if face_img is not None:
-                img_height, img_width = face_img.shape[:2]
-                # Since this is the face crop, we need to adjust based on known coordinates
-                img_width = max(img_width, x + w)
-                img_height = max(img_height, y + h)
-        
-        # If we still don't have image dimensions, use detection confidence only
-        if img_width == 0:
-            if "confidence" in face_obj and face_obj["confidence"] < 0.6:  # Using 0.6 as default confidence threshold
-                return False, "Face detection confidence too low"
-            return True, None
-        
-        MIN_WIDTH_RATIO = 0.1  # Face width should be at least 10% of image width
-        MIN_HEIGHT_RATIO = 0.1  # Face height should be at least 10% of image height
-        
-        width_ratio = w / img_width
-        height_ratio = h / img_height
-        
-        if width_ratio < MIN_WIDTH_RATIO:
-            return False, "Face too small (width)"
-            
-        if height_ratio < MIN_HEIGHT_RATIO:
-            return False, "Face too small (height)"
-        
-        MARGIN_RATIO = 0.02  
-        margin_x = img_width * MARGIN_RATIO
-        margin_y = img_height * MARGIN_RATIO
-        
-        if x < margin_x or (x + w) > (img_width - margin_x) or y < margin_y or (y + h) > (img_height - margin_y):
-            return False, "Face too close to image edge"
-        
-        if "confidence" in face_obj and face_obj["confidence"] < 0.6:
-            return False, "Face detection confidence too low"
-        
-        return True, None
-        
-    except Exception as e:
-        logger.error(f"Error checking face completeness: {str(e)}")
-        return False, f"Error checking face completeness: {str(e)}"
