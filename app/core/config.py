@@ -1,6 +1,7 @@
 import os
 from pydantic_settings import BaseSettings
 import logging
+from typing import ClassVar  # Add this import
 
 # Setup logging
 logging.basicConfig(
@@ -20,16 +21,16 @@ class Settings(BaseSettings):
     PUBLIC_KEY_PATH: str = os.path.join(KEYS_DIR, "public_key.txt")
     KEY_INFO_PATH: str = os.path.join(KEYS_DIR, "key_info.json")
     
-    # PHE settings
     PHE_ALGORITHM: str = "Paillier"
     PHE_PRECISION: int = 19
     
-    # Face detection settings
     FACE_MODEL: str = "VGG-Face"
     FACE_DETECTOR: str = "yunet"
     
-    # Similarity threshold
-    SIMILARITY_THRESHOLD: float = 0.32
+    SIMILARITY_THRESHOLD: float = 0.5
+
+    # Add proper type annotation for this field
+    ENABLE_ANTISPOOFING: bool = True 
     
     class Config:
         env_file = ".env"
