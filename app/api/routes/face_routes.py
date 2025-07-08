@@ -98,28 +98,27 @@ async def register_face_direct(request: Request, file: UploadFile = File(...)):
                                 logger.info(f"DeepFace anti-spoofing result: Face appears to be real (is_real={is_real})")
                             else:
                                 logger.warning(f"DeepFace anti-spoofing result: Potential spoof detected (is_real={is_real})")
-                                
-                                confidence = face_obj.get("confidence", 0.0)
-                                if confidence > 0.95:
-                                    logger.info(f"High confidence detection ({confidence}), overriding spoof detection")
-                                    is_spoof = False
-                            
+                                                            
                             if is_spoof:
                                 raise HTTPException(
                                     status_code=400, 
                                     detail="Potential spoofing detected. Please use a real face for registration."
                                 )
                         else:
-                            # If no faces were found in anti-spoofing check but we found faces earlier,
-                            # it's likely a processing error rather than an actual spoof
-                            logger.warning("No faces detected during anti-spoofing check, but faces were detected earlier")
-                            # We'll proceed without the anti-spoofing check in this case
+                            logger.warning("No faces detected during anti-spoofing check, aborting registration")
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Anti-spoofing failed: No face detected during anti-spoofing check. Please use a clear, real face photo."
+                            )
                     except HTTPException:
                         raise
                     except Exception as spoof_e:
-                        # More detailed logging to help diagnose the issue
-                        logger.warning(f"Anti-spoofing check failed, proceeding without it: {str(spoof_e)}")
+                        logger.warning(f"Anti-spoofing check failed, aborting registration: {str(spoof_e)}")
                         logger.warning(f"Anti-spoofing check stack trace:", exc_info=True)
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Anti-spoofing check failed: {str(spoof_e)}"
+                        )
                 
                 # Step 4: Extract the face embedding
                 logger.info(f"Extracting face embedding with model={settings.FACE_MODEL}, detector={detector_to_use}")

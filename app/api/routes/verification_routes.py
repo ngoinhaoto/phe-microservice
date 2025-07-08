@@ -92,13 +92,7 @@ async def verify_face_direct(request: Request, file: UploadFile = File(...), ses
                                 logger.info(f"DeepFace anti-spoofing result: Face appears to be real (is_real={is_real})")
                             else:
                                 logger.warning(f"DeepFace anti-spoofing result: Potential spoof detected (is_real={is_real})")
-                                
-                                # Additional check: If confidence is very high, we might still accept it
-                                confidence = face_obj.get("confidence", 0.0)
-                                if confidence > 0.95:
-                                    logger.info(f"High confidence detection ({confidence}), overriding spoof detection")
-                                    is_spoof = False
-                            
+                                                            
                             if is_spoof:
                                 raise HTTPException(
                                     status_code=400, 
