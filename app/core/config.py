@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     KEY_INFO_PATH: str = os.path.join(KEYS_DIR, "key_info.json")
     
     PHE_ALGORITHM: str = "Paillier"
-    PHE_PRECISION: int = 19
+    PHE_PRECISION: int = 14
     
     FACE_MODEL: str = "VGG-Face"
     FACE_DETECTOR: str = "yunet"
