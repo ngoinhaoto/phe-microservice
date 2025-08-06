@@ -12,7 +12,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
-        port=8001,
+        port=4002,
         workers=2 * multiprocessing.cpu_count(), 
         log_level="info"
     )

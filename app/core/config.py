@@ -13,7 +13,7 @@ logger = logging.getLogger("phe-microservice")
 class Settings(BaseSettings):
     """Application settings"""
     API_KEY: str = os.getenv("API_KEY", "your-secret-api-key")
-    SERVER_URL: str = "http://localhost:8000"
+    SERVER_URL: str = os.getenv("SERVER_URL", "http://localhost:8002")
     
     # Paths
     KEYS_DIR: str = "keys"
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     FACE_MODEL: str = "VGG-Face"
     FACE_DETECTOR: str = "yunet"
     
-    SIMILARITY_THRESHOLD: float = 0.5
+    SIMILARITY_THRESHOLD: float = 0.7
 
     # Add proper type annotation for this field
     ENABLE_ANTISPOOFING: bool = True 
